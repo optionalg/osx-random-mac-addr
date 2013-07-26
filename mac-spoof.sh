@@ -81,7 +81,7 @@ fi
 ## WE NEED ROOT!
 if [ "$(id -u)" != "0" ]; then
   print "${bold}${white}This script must be run as ${red}root${RESET}" 1>&2
-  #  exit 255
+  exit 255
 fi
 
 
