@@ -146,27 +146,50 @@ function macverify ()
   newMAC=$(print ${2} | tr '[A-Z]' '[a-z]')   ## New MAC addr
   oldMAC=${3}   ## Old MAC addr
 
-  ## Verify New MAC Addr
-  VERIFY=$(macget ${int})
-  #`ifconfig ${int} | \
-    # grep for the ether line
-  #grep ether | \
-    # cut the 2nd field, using ' ' as delimiter
-  #cut -f2 -d\ `
+  for c in {1..3}
+  do
+    {
 
-  ## the ,, is a bash 4.0 method for lower case output of a variable
-  ## check if the new MAC matches current MAC, and current isn't oldMAC
-  if [ "${VERIFY}" = "${newMAC}" -a ${VERIFY} != ${oldMAC} ]; then
-    #if [ "${VERIFY,,}" = "${newMAC,,}" -a ${VERIFY} != ${oldMAC} ]; then
-    print "${green}New MAC Verified!\t\t${blue}${VERIFY}${RESET}"
-    VERIFIED=1
-    return 0
-  else
-    print "${red}FAILED! ${int} ${RESET}"
-    print "te${newMAC}st"
-    print "te${VERIFY}st"
-    return 127
-  fi
+      ## Verify New MAC Addr
+      VERIFY=$(macget ${int})
+      #`ifconfig ${int} | \
+        # grep for the ether line
+      #grep ether | \
+        # cut the 2nd field, using ' ' as delimiter
+      #cut -f2 -d\ `
+
+      ## the ,, is a bash 4.0 method for lower case output of a variable
+      ## check if the new MAC matches current MAC, and current isn't oldMAC
+      if [ "${VERIFY}" = "${newMAC}" -a ${VERIFY} != ${oldMAC} ]; then
+        #if [ "${VERIFY,,}" = "${newMAC,,}" -a ${VERIFY} != ${oldMAC} ]; then
+        print "${green}New MAC Verified!\t\t${blue}${VERIFY}${RESET}"
+        VERIFIED=1
+        return 0
+      else
+        print "${red}FAILED! ${int} ${RESET}"
+        print "te${newMAC}st"
+        print "te${VERIFY}st"
+
+        if [ ${c} -eq 3 ];then
+          return 127
+        fi
+      fi
+
+    }
+  done
+
+}
+
+function wirelessEnable ()
+{
+  networksetup -setairportpower airport on
+  sleep ${sleepDelay}
+}
+
+function wirelessDisable ()
+{
+  networksetup -setairportpower airport off
+  sleep ${sleepDelay}
 }
 
 function wirelessReset ()
@@ -175,14 +198,19 @@ function wirelessReset ()
 
   ## check if we're working with the wifi device...
   if [ ${int} = ${defaultINT} ]; then
+
     ## see if airport is symlinked
     if [ ! -L "`which airport`" ]; then
       ln -s /System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport /usr/sbin/airport
       ## Check for airport being executable and in the path
     elif [ -x `which airport ` ]; then
+      ## cycle be sure the network is enabled/ on
+      wirelessDisable ${int}
+      wirelessEnable ${int}
       ## Dissassociate Wireless
       print "${red}Dissassociate Wireless${RESET}"
       airport -z
+  sleep ${sleepDelay}
     fi
   fi
 }
@@ -202,8 +230,10 @@ print "${blue}Interface chosen:\t\t${yellow}${INT}${RESET}"
 oldMAC=$(macget ${INT})
 
 print "Current MAC is\t\t\t${blue}${oldMAC}${RESET}"
+## check if airport is Off
 wirelessReset ${INT}
 
+## otherwise we can skip the rest
 macgenerate 
 
 macset ${INT} ${newMAC}
