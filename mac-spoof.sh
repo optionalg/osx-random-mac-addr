@@ -119,7 +119,7 @@ function macset ()
     ## and 
     ## Set the newMAC
     ## add artifical sleep delay
-    return $(ifconfig ${int} up && ifconfig ${int} ether ${newMAC} && sleep ${sleepDelay})
+    return $(ifconfig ${int} up && sleep ${sleepDelay} && ifconfig ${int} ether ${newMAC} && sleep ${sleepDelay})
   else
     ## return 1 for problem
     return 127
