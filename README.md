@@ -3,6 +3,16 @@ OS X Random MAC Address Changer
 
 A Bash shell script which does the heavy lifting and an Administrative privlege seeking OS X .app wrapper for ease of use.
 
+Use
+---------
+
+  # by default will change en1 (Wireless Interface)
+  mac-spoof.sh -yes
+
+  # You can also spoof your ethernet.
+  mac-spoof.sh -yes en0
+
+
 
 Install
 ---------
