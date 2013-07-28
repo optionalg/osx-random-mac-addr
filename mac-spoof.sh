@@ -3,12 +3,14 @@
 ## ugh, if using /bin/sh, you won't need "-e" on all the print
 
 header=`cat <<zHEAD
-Random MAC Address script for OSX
-by @px
+Random MAC Address script for OSX \n
+by @px \n
 zHEAD`
 
 ## just some defaults
 sleepDelay=1
+## 6 too small, 13 is enough with zzz's
+maxChecks=$((13+9))
 VERIFIED=0
 bogusMAC="fe:df:ed:fe:df:ed"
 newMAC=${bogusMAC}
@@ -32,15 +34,10 @@ if [[ ${TERM} =~ "color" ]]; then
 fi
 
 if [ -n ${TERM} ]; then
-
-  #echo shell $SHELL
-  #echo bash $BASH
-
   ## normalize print with print based on the shell/BASH
   if [ ${BASH} = "/bin/bash" -o ${BASH} = "/usr/local/bin/bash" ]; then
     function print ()
     {
-      #/bin/print $@
       echo -e $@
     }
   else
@@ -55,20 +52,17 @@ else
   {
     echo >/dev/null 2>/dev/null
   }
-
 fi
 
 help=`cat <<zHELP
----------------------------
-| ${cyan}HELP${RESET}
-| Defaults: ${red}en1${RESET}
---------------------------
-$ mac-spoof.sh -yes [en<01>]
+${cyan}HELP${RESET}\n
+Defaults: ${red}en1${RESET}\n
+--------------------------\n
+$ mac-spoof.sh -yes [en<01>]\n
 zHELP`
 
-
 ## print the file header
-print "${header}\n\n"
+print "${header}"
 
 ## Be sure the user wants to run this.
 if [[ "${1}" != "-yes" ]]; then
@@ -86,6 +80,14 @@ fi
 
 
 ### Function Definitions
+
+## add artifical sleep delay
+function zzz ()
+{
+  delay=${1}
+  delay=${delay:=${sleepDelay}}
+  sleep $((${delay}))
+}
 
 ## generate a mac address using openssl, and our airportPREFIX
 function macgenerate ()
@@ -116,10 +118,13 @@ function macset ()
   if [ -x `which ifconfig ` ]; then
     print "${cyan}Configuring ${yellow}${int} MAC\t\t${blue}${newMAC}${reset}"
     ## The interface has to be up otherwise we cannot configure the newMAC
+    ifconfig ${int} up && \
+      print "${blue}Interface up"
     ## and 
     ## Set the newMAC
-    ## add artifical sleep delay
-    return $(ifconfig ${int} up && sleep ${sleepDelay} && ifconfig ${int} ether ${newMAC} && sleep ${sleepDelay})
+    ifconfig ${int} ether ${newMAC}
+    #zzz 
+    return 0 
   else
     ## return 1 for problem
     return 127
@@ -144,52 +149,80 @@ function macverify ()
 
   int=${1}
   newMAC=$(print ${2} | tr '[A-Z]' '[a-z]')   ## New MAC addr
-  oldMAC=${3}   ## Old MAC addr
+  oldMAC=$(print ${3} | tr '[A-Z]' '[a-z]')   ## Old MAC addr
 
-  for c in {1..3}
-  do
-    {
+  ## Verify New MAC Addr
+  VERIFY=$(macget ${int})
 
-      ## Verify New MAC Addr
-      VERIFY=$(macget ${int})
-      #`ifconfig ${int} | \
-        # grep for the ether line
-      #grep ether | \
-        # cut the 2nd field, using ' ' as delimiter
-      #cut -f2 -d\ `
+  ## the ,, is a bash 4.0 method for lower case output of a variable
+  ## check if the new MAC matches current MAC, and current isn't oldMAC
+  if [ "${VERIFY}" = "${newMAC}" -a ${VERIFY} != "${oldMAC}" ]; then
+    #if [ "${VERIFY,,}" = "${newMAC,,}" -a ${VERIFY} != ${oldMAC} ]; then
+    print "${green}New MAC Verified!\t\t${blue}${VERIFY}${RESET}"
+    VERIFIED=1
+    #return 0
+  else
+    print "${red}FAILED! ${int} ${VERIFY}${RESET}"
+    #print "te${newMAC}st"
+    #print "te${VERIFY}st"
 
-      ## the ,, is a bash 4.0 method for lower case output of a variable
-      ## check if the new MAC matches current MAC, and current isn't oldMAC
-      if [ "${VERIFY}" = "${newMAC}" -a ${VERIFY} != ${oldMAC} ]; then
-        #if [ "${VERIFY,,}" = "${newMAC,,}" -a ${VERIFY} != ${oldMAC} ]; then
-        print "${green}New MAC Verified!\t\t${blue}${VERIFY}${RESET}"
-        VERIFIED=1
-        return 0
-      else
-        print "${red}FAILED! ${int} ${RESET}"
-        print "te${newMAC}st"
-        print "te${VERIFY}st"
+    #return 127
+  fi
+}
 
-        if [ ${c} -eq 3 ];then
-          return 127
-        fi
-      fi
-
-    }
-  done
-
+wirelessState ()
+{
+  airportState=$(airport -I | grep "state:" | cut -f2 -d':' )
+  #print "airportState \"${airportState}\""
 }
 
 function wirelessEnable ()
 {
-  networksetup -setairportpower airport on
-  sleep ${sleepDelay}
+  wirelessState
+  if [[ $(networksetup -getairportpower airport) =~ " Off" ]]; then
+    print "${blue}Power On Wireless${RESET}"
+    networksetup -setairportpower airport on
+    #zzz 1
+  else
+    true
+    #print "${blue}Wireless Already On${RESET}"
+  fi
+  wirelessState
+  #zzz 
 }
 
 function wirelessDisable ()
 {
-  networksetup -setairportpower airport off
-  sleep ${sleepDelay}
+  #wirelessState
+  if [[ $(networksetup -getairportpower airport) =~ " On" ]]; then
+    print "${red}Power Off Wireless${RESET}"
+    networksetup -setairportpower airport off
+    #zzz 1
+  else
+    true
+    #print "${red}Wireless Already Off${RESET}"
+  fi
+  #zzz 
+}
+
+function wirelessDiss ()
+{
+  wirelessState
+  if [[ ${airportState} =~ "running" ]]; then
+    ## Dissassociate Wireless
+    print "${red}Dissassociate Wireless${RESET}"
+    airport -z 
+    #zzz
+  else
+    if [[ $(networksetup -getairportnetwork airport) =~ "not associated" ]]; then
+      true
+      print "${red}Already Dissassociated${RESET}"
+    else
+      print "${red}Still Associated or something...${RESET}"
+    fi
+  fi
+  #zzz
+  wirelessState
 }
 
 function wirelessReset ()
@@ -199,18 +232,25 @@ function wirelessReset ()
   ## check if we're working with the wifi device...
   if [ ${int} = ${defaultINT} ]; then
 
-    ## see if airport is symlinked
+    ## see if airport is symlinked;
+    ## the airport could be functionalized, but
+    ## it's also nice to have airport available in the shell
+    ## but it's a waste to do these if checks each time.
     if [ ! -L "`which airport`" ]; then
       ln -s /System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport /usr/sbin/airport
       ## Check for airport being executable and in the path
     elif [ -x `which airport ` ]; then
+
+      #if [ ${airportState} = " running" ];then
+      #wirelessDiss
+      #fi
+
+      #while [ ${airportState} == " running" ]; do
       ## cycle be sure the network is enabled/ on
-      wirelessDisable ${int}
+      #wirelessDisable ${int}
       wirelessEnable ${int}
-      ## Dissassociate Wireless
-      print "${red}Dissassociate Wireless${RESET}"
-      airport -z
-  sleep ${sleepDelay}
+      wirelessDiss ${int}
+      #done
     fi
   fi
 }
@@ -230,15 +270,29 @@ print "${blue}Interface chosen:\t\t${yellow}${INT}${RESET}"
 oldMAC=$(macget ${INT})
 
 print "Current MAC is\t\t\t${blue}${oldMAC}${RESET}"
-## check if airport is Off
-wirelessReset ${INT}
+checks=1
+until  [ ${VERIFIED} -eq 1 ]; do # ||  ${checks} -ge ${maxChecks} ]; do
+  print "Check #${checks} verified? ${VERIFIED}"
 
-## otherwise we can skip the rest
-macgenerate 
+  if [[ ${checks} -le 1 ]]; then
+    macgenerate 
+  fi
+  ## check if airport is Off
+  wirelessReset ${INT}
+  zzz
+  macset ${INT} ${newMAC}
+  #zzz
+  macverify ${INT} ${newMAC} ${oldMAC}
 
-macset ${INT} ${newMAC}
-
-macverify ${INT} ${newMAC} ${oldMAC}
+  if [[ ${VERIFIED} -eq 1 ]]; then
+    ## everything is OK
+    exit 0
+  elif [[ ${checks} -ge ${maxChecks} ]]; then
+    print "${red}Maximum Checks Reached ${checks}${RESET}"
+    exit 255
+  fi
+  checks=$(( ${checks} + 1 ))
+done
 
 if [ ${VERIFIED} -eq 1 ]; then
   ## exit success
@@ -248,5 +302,5 @@ else
   exit 1
 
 fi
-exit 0
+exit 1
 
